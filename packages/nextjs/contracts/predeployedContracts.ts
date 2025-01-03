@@ -4,52 +4,52 @@
  */
 
 import {
-  devnetEthClassHash,
-  devnetStrkClassHash,
-  universalEthAddress,
-  sepoliaMainnetEthClassHash,
-  universalStrkAddress,
-  sepoliaMainnetStrkClassHash,
-  universalErc20Abi,
+    devnetEthClassHash,
+    devnetStrkClassHash,
+    universalEthAddress,
+    sepoliaMainnetEthClassHash,
+    universalStrkAddress,
+    sepoliaMainnetStrkClassHash,
+    universalErc20Abi,
 } from "../utils/Constants";
 
 const preDeployedContracts = {
-  devnet: {
-    Eth: {
-      address: universalEthAddress,
-      abi: universalErc20Abi,
-      classHash: devnetEthClassHash,
+    devnet: {
+        Eth: {
+            address: universalEthAddress,
+            abi: universalErc20Abi,
+            classHash: devnetEthClassHash,
+        },
+        Strk: {
+            address: universalStrkAddress,
+            abi: universalErc20Abi,
+            classHash: devnetStrkClassHash,
+        },
     },
-    Strk: {
-      address: universalStrkAddress,
-      abi: universalErc20Abi,
-      classHash: devnetStrkClassHash,
+    sepolia: {
+        Eth: {
+            address: universalEthAddress,
+            abi: universalErc20Abi,
+            classHash: sepoliaMainnetEthClassHash,
+        },
+        Strk: {
+            address: universalStrkAddress,
+            abi: universalErc20Abi,
+            classHash: sepoliaMainnetStrkClassHash,
+        },
     },
-  },
-  sepolia: {
-    Eth: {
-      address: universalEthAddress,
-      abi: universalErc20Abi,
-      classHash: sepoliaMainnetEthClassHash,
+    mainnet: {
+        Eth: {
+            address: universalEthAddress,
+            abi: universalErc20Abi,
+            classHash: sepoliaMainnetEthClassHash,
+        },
+        Strk: {
+            address: universalStrkAddress,
+            abi: universalErc20Abi,
+            classHash: sepoliaMainnetStrkClassHash,
+        },
     },
-    Strk: {
-      address: universalStrkAddress,
-      abi: universalErc20Abi,
-      classHash: sepoliaMainnetStrkClassHash,
-    },
-  },
-  mainnet: {
-    Eth: {
-      address: universalEthAddress,
-      abi: universalErc20Abi,
-      classHash: sepoliaMainnetEthClassHash,
-    },
-    Strk: {
-      address: universalStrkAddress,
-      abi: universalErc20Abi,
-      classHash: sepoliaMainnetStrkClassHash,
-    },
-  },
 } as const;
 
 export default preDeployedContracts;
