@@ -22,8 +22,16 @@ type HeaderMenuLink = {
 
 export const menuLinks: HeaderMenuLink[] = [
     {
-        label: "Home",
-        href: "/",
+        label: "Markets",
+        href: "/markets",
+    },
+    {
+        label: "Dashboard",
+        href: "/admin",
+    },
+    {
+        label: "Asset Management",
+        href: "/asset-management",
     },
     {
         label: "Debug Contracts",
@@ -40,6 +48,7 @@ export const HeaderMenuLinks = () => {
     useEffect(() => {
         setIsDark(theme === "dark");
     }, [theme]);
+
     return (
         <>
             {menuLinks.map(({ label, href, icon }) => {
@@ -50,10 +59,8 @@ export const HeaderMenuLinks = () => {
                             href={href}
                             passHref
                             className={`${
-                                isActive
-                                    ? "!bg-gradient-nav !text-white active:bg-gradient-nav shadow-md"
-                                    : ""
-                            } py-1.5 px-3 text-sm rounded-full gap-2 grid grid-flow-col hover:bg-gradient-nav hover:text-white`}
+                                isActive ? "bg-secondary text-secondary-content" : ""
+                            } hover:bg-secondary hover:text-secondary-content gap-2 py-2 px-4 rounded-xl`}
                         >
                             {icon}
                             <span>{label}</span>
@@ -71,65 +78,21 @@ export const HeaderMenuLinks = () => {
 export const Header = () => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const burgerMenuRef = useRef<HTMLDivElement>(null);
-
     useOutsideClick(
-        //@ts-expect-error refs are supposed to be null by default
         burgerMenuRef,
         useCallback(() => setIsDrawerOpen(false), [])
     );
 
-    const { targetNetwork } = useTargetNetwork();
-    const isLocalNetwork = targetNetwork.network === devnet.network;
-
-    const { provider } = useProvider();
-    const { address, status, chainId } = useAccount();
-    const { chain } = useNetwork();
-    const [isDeployed, setIsDeployed] = useState(true);
-
-    useEffect(() => {
-        if (
-            status === "connected" &&
-            address &&
-            chainId === targetNetwork.id &&
-            chain.network === targetNetwork.network
-        ) {
-            provider
-                .getClassHashAt(address)
-                .then((classHash) => {
-                    if (classHash) setIsDeployed(true);
-                    else setIsDeployed(false);
-                })
-                .catch((e) => {
-                    console.error("contreact cehc", e);
-                    if (e.toString().includes("Contract not found")) {
-                        setIsDeployed(false);
-                    }
-                });
-        }
-    }, [
-        status,
-        address,
-        provider,
-        chainId,
-        targetNetwork.id,
-        targetNetwork.network,
-        chain.network,
-    ]);
-
     return (
-        <div className=" lg:static top-0 navbar min-h-0 flex-shrink-0 justify-between z-20 px-0 sm:px-2">
-            <div className="navbar-start w-auto lg:w-1/2 -mr-2">
+        <div className="sticky top-0 navbar bg-base-100 min-h-0 flex-shrink-0 justify-between z-20 shadow-md shadow-secondary px-0 sm:px-2">
+            <div className="navbar-start w-auto lg:w-1/2">
                 <div
                     className="lg:hidden dropdown"
                     ref={burgerMenuRef}
                 >
                     <label
                         tabIndex={0}
-                        className={`ml-1 btn btn-ghost 
-              [@media(max-width:379px)]:!px-3 [@media(max-width:379px)]:!py-1 
-              [@media(max-width:379px)]:!h-9 [@media(max-width:379px)]:!min-h-0
-              [@media(max-width:379px)]:!w-10
-              ${isDrawerOpen ? "hover:bg-secondary" : "hover:bg-transparent"}`}
+                        className={`ml-1 btn btn-ghost ${isDrawerOpen ? "hover:bg-secondary" : "hover:bg-transparent"}`}
                         onClick={() => {
                             setIsDrawerOpen((prevIsOpenState) => !prevIsOpenState);
                         }}
@@ -139,7 +102,7 @@ export const Header = () => {
                     {isDrawerOpen && (
                         <ul
                             tabIndex={0}
-                            className="menu menu-compact dropdown-content mt-3 p-2 shadow rounded-box w-52 bg-base-100"
+                            className="menu menu-compact dropdown-content mt-3 p-2 shadow bg-base-100 rounded-box w-52"
                             onClick={() => {
                                 setIsDrawerOpen(false);
                             }}
@@ -155,32 +118,24 @@ export const Header = () => {
                 >
                     <div className="flex relative w-10 h-10">
                         <Image
-                            alt="SE2 logo"
+                            alt="Pure DeFi logo"
                             className="cursor-pointer"
                             fill
                             src="/logo.svg"
                         />
                     </div>
                     <div className="flex flex-col">
-                        <span className="font-bold leading-tight">Scaffold-Stark</span>
-                        <span className="text-xs">Starknet dev stack</span>
+                        <span className="font-bold leading-tight">Pure DeFi</span>
+                        <span className="text-xs">Lending Protocol</span>
                     </div>
                 </Link>
-                <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
+                <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal gap-2 px-1">
                     <HeaderMenuLinks />
                 </ul>
             </div>
-            <div className="navbar-end flex-grow mr-2 gap-4">
-                {status === "connected" && !isDeployed ? (
-                    <span className="bg-[#8a45fc] text-[9px] p-1 text-white">
-                        Wallet Not Deployed
-                    </span>
-                ) : null}
+            <div className="navbar-end flex-grow mr-4">
                 <CustomConnectButton />
-                {/* <FaucetButton /> */}
-                <SwitchTheme
-                    className={`pointer-events-auto ${isLocalNetwork ? "mb-1 lg:mb-0" : ""}`}
-                />
+                <SwitchTheme />
             </div>
         </div>
     );

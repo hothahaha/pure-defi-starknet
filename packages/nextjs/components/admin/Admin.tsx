@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAccount } from "@starknet-react/core";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-stark/useScaffoldReadContract";
 import { formatUnits } from "ethers";
 import { AssetCard } from "./AssetCard";
 import { UserStats } from "./UserStats";
+import { UserAsset } from "./types";
+import { toast } from "react-hot-toast";
+import { useScaffoldWriteContract } from "~~/hooks/scaffold-stark/useScaffoldWriteContract";
 
 export function Admin() {
     const { address, isConnected } = useAccount();
+    const [isClaiming, setIsClaiming] = useState(false);
+    const [totalDeposit, setTotalDeposit] = useState("0");
+    const [totalBorrow, setTotalBorrow] = useState("0");
 
     // 获取支持的资产列表
     const { data: supportedAssets } = useScaffoldReadContract({
@@ -45,12 +51,19 @@ export function Admin() {
         args: supportedAssets ? [address, [...supportedAssets]] : ([] as any),
     });
 
+    // 将 claim 函数移到组件内部
+    const { sendAsync: claimReward } = useScaffoldWriteContract({
+        contractName: "LendingPool",
+        functionName: "claim_reward",
+        args: [address],
+    });
+
     // 处理用户资产数据
     const userAssets = useMemo(() => {
         if (!supportedAssets?.length || !assetConfigs?.length || !userDataList?.length) return [];
 
         return supportedAssets
-            .map((address, index) => {
+            .map((address: any, index: any) => {
                 const config = assetConfigs[index];
                 const userData = userDataList[index];
                 const rewards = pendingRewards?.[index];
@@ -68,18 +81,59 @@ export function Admin() {
                     icon: config.icon || "",
                     depositAmount,
                     borrowAmount,
-                    depositValue: formatUnits(userData?.deposit_value?.toString() || "0", 18),
-                    borrowValue: formatUnits(userData?.borrow_value?.toString() || "0", 18),
+                    depositValue: formatUnits(userData?.deposit_amount_usd?.toString() || "0", 18),
+                    borrowValue: formatUnits(userData?.borrow_amount_usd?.toString() || "0", 18),
                     pendingRewards: formatUnits(rewards?.toString() || "0", 18),
                 };
             })
             .filter(Boolean);
     }, [supportedAssets, assetConfigs, userDataList, pendingRewards]);
 
+    // 使用 useEffect 来更新统计数据
+    useEffect(() => {
+        const depositValue = userAssets.reduce(
+            (acc, asset) => acc + Number(asset?.depositValue || 0),
+            0
+        );
+        const borrowValue = userAssets.reduce(
+            (acc, asset) => acc + Number(asset?.borrowValue || 0),
+            0
+        );
+        setTotalDeposit(depositValue.toFixed(2));
+        setTotalBorrow(borrowValue.toFixed(2));
+    }, [userAssets]);
+
     // 刷新数据
     const refreshData = useCallback(async () => {
+        if (!address) return;
         await refetchUserData();
-    }, [refetchUserData]);
+    }, [address, refetchUserData]);
+
+    const totalRewards = useMemo(() => {
+        return userAssets.reduce(
+            (total: any, asset: any) => total + Number(asset?.pendingRewards || 0),
+            0
+        );
+    }, [userAssets]);
+
+    // 处理 claim all 的函数也移到组件内部
+    const handleClaimAll = useCallback(async () => {
+        if (!address) return;
+
+        try {
+            setIsClaiming(true);
+            await claimReward({
+                args: [address],
+            });
+            toast.success("Rewards claimed successfully!");
+            await refreshData();
+        } catch (error) {
+            console.error("Failed to claim rewards:", error);
+            toast.error("Failed to claim rewards");
+        } finally {
+            setIsClaiming(false);
+        }
+    }, [address, claimReward, refreshData]);
 
     if (!isConnected) {
         return (
@@ -90,20 +144,56 @@ export function Admin() {
     }
 
     return (
-        <div className="flex flex-col gap-y-6 lg:gap-y-8 py-8 lg:py-12 justify-center items-center bg-base-200">
-            <div className="w-full max-w-7xl">
-                <h1 className="text-4xl font-bold mb-8">Your Dashboard</h1>
+        <div className="bg-base-200 h-[calc(100vh-4rem-3rem)] overflow-hidden">
+            <div className="container mx-auto max-w-7xl h-full px-4 py-6 flex flex-col">
+                <h1 className="text-4xl font-bold mb-6">Your Dashboard</h1>
 
-                <UserStats totalValue={formatUnits(userTotalValue?.[0]?.toString() || "0", 18)} />
+                <UserStats
+                    totalDeposit={totalDeposit}
+                    totalBorrow={totalBorrow}
+                />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-                    {userAssets.map((asset) => (
-                        <AssetCard
-                            key={asset.address}
-                            asset={asset}
-                            onRefresh={refreshData}
-                        />
-                    ))}
+                <div className="mt-6 flex-1 min-h-0 overflow-hidden">
+                    <div className="h-full overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4 pr-2">
+                            {userAssets.map((asset: any) => (
+                                <AssetCard
+                                    key={asset?.address}
+                                    asset={asset as UserAsset}
+                                    onRefresh={refreshData}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-6 bg-base-100 rounded-box shadow-lg p-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <p className="text-sm opacity-70">Total Pending Rewards</p>
+                            <p className="text-xl font-semibold">
+                                {userAssets
+                                    .reduce(
+                                        (total: any, asset: any) =>
+                                            total + Number(asset?.pendingRewards || 0),
+                                        0
+                                    )
+                                    .toFixed(4)}{" "}
+                                DSC
+                            </p>
+                        </div>
+                        <button
+                            className="btn btn-accent"
+                            onClick={handleClaimAll}
+                            disabled={isClaiming || totalRewards <= 0}
+                        >
+                            {isClaiming ? (
+                                <span className="loading loading-spinner" />
+                            ) : (
+                                "Claim All"
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

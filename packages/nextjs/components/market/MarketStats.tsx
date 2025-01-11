@@ -5,12 +5,12 @@ export function MarketStats({ totalDeposits, totalBorrows }: MarketStatsProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
             <div className="stat bg-base-100 rounded-box shadow">
                 <div className="stat-title text-base-content/60">Total Deposits</div>
-                <div className="stat-value text-3xl">${totalDeposits}</div>
+                <div className="stat-value text-3xl">${Number(totalDeposits).toFixed(4)}</div>
             </div>
 
             <div className="stat bg-base-100 rounded-box shadow">
                 <div className="stat-title text-base-content/60">Total Borrows</div>
-                <div className="stat-value text-3xl">${totalBorrows}</div>
+                <div className="stat-value text-3xl">${Number(totalBorrows).toFixed(4)}</div>
             </div>
         </div>
     );

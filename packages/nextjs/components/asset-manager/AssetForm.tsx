@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+"use client";
+
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { AssetFormData, AssetFormProps } from "./types";
 import { AddressInput } from "~~/components/scaffold-stark";

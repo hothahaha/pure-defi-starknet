@@ -43,7 +43,7 @@ fn test_full_lending_cycle() {
 
     // 用户1领取奖励
     start_cheat_caller_address(lending_pool_address, user1);
-    lending_pool.claim_reward(*token, user1);
+    lending_pool.claim_reward(user1);
     stop_cheat_caller_address(lending_pool_address);
 
     stop_cheat_block_timestamp(lending_pool_address);
@@ -91,12 +91,12 @@ fn test_multiple_users_interaction() {
 
     // 用户领取奖励
     start_cheat_caller_address(lending_pool_address, user1);
-    lending_pool.claim_reward(*token, user1);
+    lending_pool.claim_reward(user1);
     let balance1 = dsc.balance_of(user1);
     stop_cheat_caller_address(lending_pool_address);
 
     start_cheat_caller_address(lending_pool_address, user2);
-    lending_pool.claim_reward(*token, user2);
+    lending_pool.claim_reward(user2);
     let balance2 = dsc.balance_of(user2);
     stop_cheat_caller_address(lending_pool_address);
 

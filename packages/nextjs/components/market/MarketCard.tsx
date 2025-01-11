@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useCallback } from "react";
 import { Contract as StarknetJsContract } from "starknet";
 import { useAccount } from "~~/hooks/useAccount";
@@ -7,7 +9,6 @@ import { formatUnits, parseUnits } from "ethers";
 import { toast } from "react-hot-toast";
 import { Market, MarketCardProps } from "./types";
 import { createPortal } from "react-dom";
-import { useScaffoldMultiWriteContract } from "~~/hooks/scaffold-stark/useScaffoldMultiWriteContract";
 import deployedContracts from "~~/contracts/deployedContracts";
 import { useSendTransaction, useNetwork } from "@starknet-react/core";
 import { useTargetNetwork } from "~~/hooks/scaffold-stark/useTargetNetwork";
@@ -67,10 +68,12 @@ function DepositModal({
             // 创建 ERC20 合约实例
             const erc20Contract = new StarknetJsContract(ERC20_ABI, market.address);
 
+            console.log("targetNetwork.network: ", targetNetwork.network);
             // 构建 approve 调用
             const approveCall = [
                 erc20Contract.populate("approve", [
-                    deployedContracts.devnet.LendingPool.address,
+                    deployedContracts[targetNetwork.network as keyof typeof deployedContracts]
+                        .LendingPool.address,
                     parseUnits(amount, 18),
                 ]),
             ];
@@ -252,9 +255,9 @@ export function MarketCard({ market, isConnected, onRefresh }: MarketCardProps) 
                     />
                     {market.symbol}
                 </td>
-                <td className="font-mono">${market.asset_price}</td>
-                <td className="text-success font-mono">{market.depositAPY}%</td>
-                <td className="text-warning font-mono">{market.borrowAPY}%</td>
+                <td className="font-mono">${Number(market.asset_price).toFixed(4)}</td>
+                <td className="text-success font-mono">{Number(market.depositAPY).toFixed(4)}%</td>
+                <td className="text-warning font-mono">{Number(market.borrowAPY).toFixed(4)}%</td>
                 <td className="font-mono">{market.walletBalance}</td>
                 {isConnected && (
                     <>

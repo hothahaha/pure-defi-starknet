@@ -1,4 +1,5 @@
-import { formatUnits } from "ethers";
+"use client";
+
 import { AssetCardProps } from "./types";
 import { useMemo } from "react";
 

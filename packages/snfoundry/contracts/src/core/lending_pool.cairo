@@ -55,7 +55,7 @@ pub trait ILendingPool<TContractState> {
         ref self: TContractState, asset: ContractAddress, user: ContractAddress, amount: u256,
     );
     fn repay(ref self: TContractState, asset: ContractAddress, user: ContractAddress, amount: u256);
-    fn claim_reward(ref self: TContractState, asset: ContractAddress, user: ContractAddress);
+    fn claim_reward(ref self: TContractState, user: ContractAddress);
     fn add_asset(ref self: TContractState, token: ContractAddress, config: AssetConfig);
     fn pause(ref self: TContractState);
     fn unpause(ref self: TContractState);
@@ -119,10 +119,11 @@ mod LendingPool {
     );
 
     const PRECISION: u256 = 1000000000000000000; // 1e18
+    const PRAGMA_DECIMALS_PRECISION: u256 = 100000000; // 1e8
     const ETH_USD_PAIR_ID: felt252 = 'ETH/USD';
     const STRK_USD_PAIR_ID: felt252 = 'STRK/USD';
-    const ETH_INIT_PRICE: u128 = 2000000000000000000000; // 2000 * 1e18
-    const STRK_INIT_PRICE: u128 = 1000000000000000000; // 1 * 1e18
+    const ETH_INIT_PRICE: u128 = 200000000000; // 2000 * 1e18
+    const STRK_INIT_PRICE: u128 = 100000000; // 1 * 1e18
     const PRAGMA_DECIMALS: u8 = 8;
     const DEFAULT_NUM_SOURCES: u32 = 5;
 
@@ -321,14 +322,17 @@ mod LendingPool {
             let success = token.transfer_from(caller, get_contract_address(), amount);
             assert(success.unwrap(), Errors::TRANSFER_FAILED);
 
-            // 更新奖励债务
+            // TODO: 更新奖励债务
             let acc_reward = self.acc_reward_per_share.entry(asset).read();
-            let curr_reward = (weighted_amount * acc_reward) / PRECISION;
-            assert(curr_reward >= user_info.reward_debt, Errors::INVALID_REWARD_DEBT);
-            let pending = curr_reward - user_info.reward_debt;
-            let mint_success = self.dsc_token.read().mint(caller, pending);
-            assert(mint_success, Errors::MINT_FAILED);
-            user_info.reward_debt = (weighted_amount * acc_reward) / PRECISION;
+            if acc_reward > 0 {
+                // let curr_reward = weighted_amount / PRECISION;
+                let curr_reward = (weighted_amount * acc_reward) / PRECISION;
+                assert(curr_reward >= user_info.reward_debt, Errors::INVALID_REWARD_DEBT);
+                let pending = curr_reward - user_info.reward_debt;
+                let mint_success = self.dsc_token.read().mint(caller, pending);
+                assert(mint_success, Errors::MINT_FAILED);
+                user_info.reward_debt = (weighted_amount * acc_reward) / PRECISION;
+            }
 
             // 更新存储
             self.user_infos.entry(asset).entry(caller).write(user_info);
@@ -375,7 +379,7 @@ mod LendingPool {
             // 检查提现后的抵押率
             let (_, borrowed_value) = self.get_user_total_value_in_usd(caller);
             if borrowed_value > 0 {
-                let borrow_limit = self.get_user_borrow_limit(caller, asset);
+                let borrow_limit = self.get_user_borrow_limit_in_usd(caller);
                 assert(borrowed_value <= borrow_limit, Errors::WITHDRAWAL_EXCEEDS);
             }
 
@@ -433,11 +437,11 @@ mod LendingPool {
             }
 
             // 获取价格并计算借款价值
-            let oracle = IPragmaCustomDispatcher { contract_address: self.oracle_address.read() };
-            let price = oracle.fetch_price(asset, true).unwrap();
+            let price = self.get_asset_price(asset);
 
-            let current_borrow_value = (user_info.borrow_amount * price.into()).into() / PRECISION;
-            let new_borrow_value = (amount * price.into()) / PRECISION;
+            let current_borrow_value = (user_info.borrow_amount * price.into()).into()
+                / PRAGMA_DECIMALS_PRECISION;
+            let new_borrow_value = (amount * price.into()) / PRAGMA_DECIMALS_PRECISION;
             let borrow_limit = self.get_user_borrow_limit_in_usd(caller);
 
             // 检查借款限额
@@ -524,45 +528,56 @@ mod LendingPool {
 
         /// @notice 领取奖励
         /// @param asset 资产地址
-        fn claim_reward(ref self: ContractState, asset: ContractAddress, user: ContractAddress) {
+        fn claim_reward(ref self: ContractState, user: ContractAddress) {
             self.pausable.assert_not_paused();
-            InternalFunctions::update_asset_info(ref self, asset);
+            let mut i: u64 = 0;
 
-            let caller = user;
-            assert(!caller.is_zero(), Errors::INVALID_USER);
-            let mut user_info = self.user_infos.entry(asset).entry(caller).read();
-            let asset_info = self.asset_infos.entry(asset).read();
+            loop {
+                if i >= self.asset_tokens.len() {
+                    break;
+                }
+                let asset = self.asset_tokens.at(i).read();
+                InternalFunctions::update_asset_info(ref self, asset);
 
-            // 计算累积的存款利息
-            let deposit_interest = InternalFunctions::calculate_accrued_interest(
-                user_info.deposit_amount.into(), user_info.deposit_index, asset_info.deposit_index,
-            );
+                let caller = user;
+                assert(!caller.is_zero(), Errors::INVALID_USER);
+                let mut user_info = self.user_infos.entry(asset).entry(caller).read();
+                let asset_info = self.asset_infos.entry(asset).read();
 
-            // 计算时间加权金额
-            let weighted_amount = calculate_weighted_amount(
-                (user_info.deposit_amount.into() + deposit_interest).try_into().unwrap(),
-                user_info.last_update_time,
-                get_block_timestamp(),
-            );
+                // 计算累积的存款利息
+                let deposit_interest = InternalFunctions::calculate_accrued_interest(
+                    user_info.deposit_amount.into(),
+                    user_info.deposit_index,
+                    asset_info.deposit_index,
+                );
 
-            // 计算待领取奖励
-            let acc_reward = self.acc_reward_per_share.entry(asset).read();
-            let pending = (weighted_amount * acc_reward) / PRECISION - user_info.reward_debt;
+                // 计算时间加权金额
+                let weighted_amount = calculate_weighted_amount(
+                    (user_info.deposit_amount.into() + deposit_interest).try_into().unwrap(),
+                    user_info.last_update_time,
+                    get_block_timestamp(),
+                );
 
-            if pending > 0 {
-                // 更新用户状态
-                user_info.deposit_index = asset_info.deposit_index;
-                user_info.last_update_time = get_block_timestamp();
-                user_info.reward_debt = (weighted_amount * acc_reward) / PRECISION;
+                // 计算待领取奖励
+                let acc_reward = self.acc_reward_per_share.entry(asset).read();
+                let pending = (weighted_amount * acc_reward) / PRECISION - user_info.reward_debt;
 
-                // 更新储
-                self.user_infos.entry(asset).entry(caller).write(user_info);
+                if pending > 0 {
+                    // 更新用户状态
+                    user_info.deposit_index = asset_info.deposit_index;
+                    user_info.last_update_time = get_block_timestamp();
+                    user_info.reward_debt = (weighted_amount * acc_reward) / PRECISION;
 
-                // 铸造奖励
-                let mint_success = self.dsc_token.read().mint(caller, pending);
-                assert(mint_success, Errors::MINT_FAILED);
+                    // 更新储
+                    self.user_infos.entry(asset).entry(caller).write(user_info);
 
-                self.emit(RewardClaimed { asset, user: caller, amount: pending });
+                    // 铸造奖励
+                    let mint_success = self.dsc_token.read().mint(caller, pending);
+                    assert(mint_success, Errors::MINT_FAILED);
+
+                    self.emit(RewardClaimed { asset, user: caller, amount: pending });
+                }
+                i += 1;
             }
         }
 
@@ -591,8 +606,9 @@ mod LendingPool {
                 let mut user_info = self.get_user_info(user, asset);
                 let price = self.get_asset_price(asset);
                 user_info.deposit_amount_usd = (user_info.deposit_amount * price.into())
-                    / PRECISION;
-                user_info.borrow_amount_usd = (user_info.borrow_amount * price.into()) / PRECISION;
+                    / PRAGMA_DECIMALS_PRECISION;
+                user_info.borrow_amount_usd = (user_info.borrow_amount * price.into())
+                    / PRAGMA_DECIMALS_PRECISION;
                 infos.append(user_info);
             };
             infos
@@ -630,10 +646,10 @@ mod LendingPool {
                 asset_info.asset_price = price;
                 // 计算总存款美元
                 asset_info.total_deposits_usd = (asset_info.total_deposits * price.into())
-                    / PRECISION;
+                    / PRAGMA_DECIMALS_PRECISION;
                 // 计算总借款美元
                 asset_info.total_borrows_usd = (asset_info.total_borrows * price.into())
-                    / PRECISION;
+                    / PRAGMA_DECIMALS_PRECISION;
                 infos.append(asset_info);
             };
             infos
@@ -655,12 +671,10 @@ mod LendingPool {
                 if user_info.deposit_amount > 0 {
                     let config = self.asset_manager.read().get_asset_config(asset);
 
-                    let oracle = IPragmaCustomDispatcher {
-                        contract_address: self.oracle_address.read(),
-                    };
-                    let price = oracle.fetch_price(asset, true).unwrap();
+                    let price = self.get_asset_price(asset);
 
-                    let asset_value = (user_info.deposit_amount.into() * price.into()) / PRECISION;
+                    let asset_value = (user_info.deposit_amount.into() * price.into())
+                        / PRAGMA_DECIMALS_PRECISION;
                     total_value += (asset_value * config.collateral_factor) / PRECISION;
                 }
                 i += 1;
@@ -685,10 +699,9 @@ mod LendingPool {
             }
 
             // 转换为资产数量
-            let oracle = IPragmaCustomDispatcher { contract_address: self.oracle_address.read() };
-            let price: u256 = oracle.fetch_price(asset, true).unwrap().into();
+            let price: u256 = self.get_asset_price(asset).into();
 
-            ((total_borrow_limit_value - borrowed_value) * PRECISION) / price
+            ((total_borrow_limit_value - borrowed_value) * PRAGMA_DECIMALS_PRECISION) / price
         }
 
         /// @notice 获取用户借款限额的金额
@@ -707,12 +720,10 @@ mod LendingPool {
                 if user_info.deposit_amount > 0 {
                     let config = self.asset_manager.read().get_asset_config(current_asset);
 
-                    let oracle = IPragmaCustomDispatcher {
-                        contract_address: self.oracle_address.read(),
-                    };
-                    let price = oracle.fetch_price(current_asset, true).unwrap();
+                    let price = self.get_asset_price(current_asset);
 
-                    let deposit_value = (user_info.deposit_amount * price.into()) / PRECISION;
+                    let deposit_value = (user_info.deposit_amount * price.into())
+                        / PRAGMA_DECIMALS_PRECISION;
                     let collateral_value = (deposit_value * config.collateral_factor) / PRECISION;
                     let borrow_limit_value = (collateral_value * config.borrow_factor) / PRECISION;
                     total_borrow_limit_in_usd += borrow_limit_value;
@@ -741,12 +752,14 @@ mod LendingPool {
                 let price: u256 = self.get_asset_price(asset).into();
 
                 if user_info.deposit_amount > 0 {
-                    let deposit_value = (user_info.deposit_amount.into() * price) / PRECISION;
+                    let deposit_value = (user_info.deposit_amount.into() * price)
+                        / PRAGMA_DECIMALS_PRECISION;
                     total_deposit_value += deposit_value;
                 }
 
                 if user_info.borrow_amount > 0 {
-                    let borrow_value = (user_info.borrow_amount.into() * price) / PRECISION;
+                    let borrow_value = (user_info.borrow_amount.into() * price)
+                        / PRAGMA_DECIMALS_PRECISION;
                     total_borrow_value += borrow_value;
                 }
 
@@ -778,16 +791,25 @@ mod LendingPool {
             }
 
             // 获取价格
-            let oracle = IPragmaCustomDispatcher { contract_address: self.oracle_address.read() };
-            let price: u256 = oracle.fetch_price(asset, true).unwrap().into();
+            let price: u256 = self.get_asset_price(asset).into();
 
             let config = self.asset_manager.read().get_asset_config(asset);
 
             // 转换为资产数量
-            let available_usd = borrow_limit - current_borrows;
-            let max_withdraw = (available_usd * PRECISION) / config.collateral_factor;
-            let max_withdraw = (max_withdraw * PRECISION) / config.borrow_factor;
-            let max_withdraw = (max_withdraw * PRECISION) / price;
+            let max_withdraw = if current_borrows > 0 {
+                // 有借款的情况，通过借款限额-已借款价值，计算可提现金额
+                let available_usd = borrow_limit - current_borrows;
+                let collateral_amount_usd = (available_usd * PRECISION) / config.collateral_factor;
+                let withdraw_amount_usd = (collateral_amount_usd * PRECISION)
+                    / config.borrow_factor;
+                (withdraw_amount_usd * PRAGMA_DECIMALS_PRECISION) / price
+            } else {
+                // 没有借款的情况，通过借款限额反推抵押金额再反推存款金额，即可提现金额
+                let collateral_amount_usd = (borrow_limit * PRECISION) / config.collateral_factor;
+                let withdraw_amount_usd = (collateral_amount_usd * PRECISION)
+                    / config.borrow_factor;
+                (withdraw_amount_usd * PRAGMA_DECIMALS_PRECISION) / price
+            };
 
             // 不能超过用户实际存款
             if max_withdraw > user_info.deposit_amount.into() {
@@ -885,8 +907,11 @@ mod LendingPool {
         /// @notice 获取资产价格
         /// @param asset_id 资产ID
         fn get_asset_price(self: @ContractState, asset_id: ContractAddress) -> u128 {
+            let assetManager = self.asset_manager.read();
+            let assetConfig = assetManager.get_asset_config(asset_id);
+            let pairId = assetConfig.pair_id;
             let oracle = IPragmaCustomDispatcher { contract_address: self.oracle_address.read() };
-            let price = oracle.fetch_price(asset_id, true).unwrap();
+            let price = oracle.fetch_price(pairId, true).unwrap();
             price
         }
 
@@ -908,10 +933,9 @@ mod LendingPool {
             InternalFunctions::mock_valid_price_update(
                 mock_pragma, strk_yang, STRK_USD_PAIR_ID, STRK_INIT_PRICE, get_block_timestamp(),
             );
-
             // Add yangs to Pragma
-            pragma.set_yang_pair_id(eth_yang, ETH_USD_PAIR_ID);
-            pragma.set_yang_pair_id(strk_yang, STRK_USD_PAIR_ID);
+        // pragma.set_yang_pair_id(eth_yang, ETH_USD_PAIR_ID);
+        // pragma.set_yang_pair_id(strk_yang, STRK_USD_PAIR_ID);
         }
     }
 
@@ -926,7 +950,7 @@ mod LendingPool {
             if current_index - user_index > 0 {
                 return 0;
             }
-            interest_rate_model_utils::calculate_interest(principal, current_index - user_index, 1)
+            (principal * (current_index - user_index) / user_index)
         }
 
         fn update_asset_info(ref self: ContractState, asset: ContractAddress) {

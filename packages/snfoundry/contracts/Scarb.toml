@@ -19,16 +19,8 @@ snforge_std = "0.34.0"
 [[target.starknet-contract]]
 casm = true
 
-[tool.fmt]
-sort-module-level-items = true
-
 [scripts]
 test = "snforge test"
-
-[profile.dev.cairo]
-unstable-add-statements-code-locations-debug-info = true
-unstable-add-statements-functions-debug-info = true
-inlining-strategy = "avoid"
 
 [tool.snforge]
 exit_first = true

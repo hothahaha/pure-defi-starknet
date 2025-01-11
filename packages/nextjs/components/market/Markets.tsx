@@ -1,17 +1,25 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useAccount } from "@starknet-react/core";
+import { useAccount, useNetwork } from "@starknet-react/core";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-stark/useScaffoldReadContract";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-stark/useScaffoldWriteContract";
 import { MarketCard } from "./MarketCard";
 import { MarketStats } from "./MarketStats";
 import { formatUnits } from "ethers";
+import { devnet } from "@starknet-react/chains";
 import deployedContracts from "~~/contracts/deployedContracts";
 import { toast } from "react-hot-toast";
 
 export function Markets() {
     const { address, isConnected } = useAccount();
+    const { chain } = useNetwork();
+
+    // 检查是否是部署者地址
+    const isDeployer =
+        address?.toLowerCase() === process.env.NEXT_PUBLIC_ACCOUNT_ADDRESS_DEVNET?.toLowerCase();
+    // 检查是否是 devnet 网络
+    const isDevnet = chain?.id === devnet.id && chain?.network === devnet.network;
 
     // 获取支持的资产列表和相关数据
     const { data: supportedAssets, refetch: refetchAssets } = useScaffoldReadContract({
@@ -64,7 +72,7 @@ export function Markets() {
     const markets = useMemo(() => {
         if (!supportedAssets?.length || !assetConfigs?.length || !marketDataList?.length) return [];
 
-        return supportedAssets.map((address, index) => {
+        return supportedAssets.map((address: any, index: any) => {
             const config = assetConfigs[index];
             const marketData = marketDataList[index];
             const userData = userDataList?.[index];
@@ -80,7 +88,7 @@ export function Markets() {
                 icon: config.icon || "",
                 depositAPY: formatUnits(marketData.deposit_rate?.toString() || "0", 18),
                 borrowAPY: formatUnits(marketData.borrow_rate?.toString() || "0", 18),
-                asset_price: formatUnits(marketData.asset_price?.toString() || "0", 18),
+                asset_price: formatUnits(marketData.asset_price?.toString() || "0", 8),
                 walletBalance: walletBalance.toFixed(4), // 四舍五入保留4位小数
                 depositBalance: formatUnits(userData?.deposit_amount?.toString() || "0", 18),
                 borrowBalance: formatUnits(userData?.borrow_amount?.toString() || "0", 18),
@@ -129,11 +137,13 @@ export function Markets() {
     };
 
     return (
-        <div className="flex flex-col gap-y-6 lg:gap-y-8 py-8 lg:py-12 justify-center items-center bg-base-200">
-            <div className="w-full max-w-7xl">
+        <div className="bg-base-200">
+            <div className="container mx-auto max-w-7xl px-4 py-8">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-4xl font-bold">Lending Markets</h1>
-                    <div className="flex gap-2">
+
+                    {/* 只在 devnet 和部署者地址时显示 initPragma 按钮 */}
+                    {isDevnet && isDeployer && (
                         <button
                             className="btn btn-primary"
                             onClick={handleInitPragma}
@@ -145,7 +155,7 @@ export function Markets() {
                                 "Init Pragma"
                             )}
                         </button>
-                    </div>
+                    )}
                 </div>
 
                 <MarketStats
@@ -153,35 +163,37 @@ export function Markets() {
                     totalBorrows={totalBorrows}
                 />
 
-                <div className="mt-8 overflow-x-auto">
-                    <table className="table w-full">
-                        <thead>
-                            <tr className="text-base bg-base-300">
-                                <th>Asset</th>
-                                <th>Asset Price</th>
-                                <th>Deposit APY</th>
-                                <th>Borrow APY</th>
-                                <th>Wallet Balance</th>
-                                {isConnected && (
-                                    <>
-                                        <th>Your Deposits</th>
-                                        <th>Your Borrows</th>
-                                    </>
-                                )}
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {markets.map((market, index) => (
-                                <MarketCard
-                                    key={index}
-                                    market={market}
-                                    isConnected={isConnected || false}
-                                    onRefresh={refreshData}
-                                />
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="mt-8 bg-base-100 rounded-box shadow-lg">
+                    <div className="overflow-x-auto">
+                        <table className="table w-full">
+                            <thead>
+                                <tr className="text-base bg-base-300">
+                                    <th>Asset</th>
+                                    <th>Asset Price</th>
+                                    <th>Deposit APY</th>
+                                    <th>Borrow APY</th>
+                                    <th>Wallet Balance</th>
+                                    {isConnected && (
+                                        <>
+                                            <th>Your Deposits</th>
+                                            <th>Your Borrows</th>
+                                        </>
+                                    )}
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {markets.map((market: any, index: any) => (
+                                    <MarketCard
+                                        key={index}
+                                        market={market}
+                                        isConnected={isConnected || false}
+                                        onRefresh={refreshData}
+                                    />
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

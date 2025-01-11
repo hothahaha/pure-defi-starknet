@@ -52,10 +52,13 @@ export function AssetManager() {
 
     // 处理资产数据
     const assets = useMemo(() => {
+        console.log("supportedAssets", supportedAssets);
+        console.log("assetConfigs", assetConfigs);
+        console.log("marketDataList", marketDataList);
         if (!supportedAssets?.length || !assetConfigs?.length || !marketDataList?.length) return [];
 
         return supportedAssets
-            .map((address, index) => {
+            .map((address: any, index: any) => {
                 const config = assetConfigs[index];
                 const marketData = marketDataList[index];
 
@@ -74,13 +77,13 @@ export function AssetManager() {
                     totalBorrows: formatUnits(marketData.total_borrows?.toString() || "0", 18),
                 };
             })
-            .filter((asset): asset is Asset => asset !== null);
+            .filter((asset: any): asset is Asset => asset !== null);
     }, [supportedAssets, assetConfigs, marketDataList]);
 
     return (
-        <div className="flex flex-col pt-6 gap-6 bg-base-100 flex-grow">
-            <div className="flex flex-col gap-6 px-8 py-6 bg-base-200">
-                <div className="flex justify-between items-center max-w-[1200px] mx-auto w-full">
+        <div className="bg-base-200">
+            <div className="container mx-auto max-w-7xl px-4 py-8">
+                <div className="flex justify-between items-center mb-8">
                     <h1 className="text-4xl font-bold">Asset Management</h1>
                     {isConnected && (
                         <button
@@ -91,43 +94,39 @@ export function AssetManager() {
                         </button>
                     )}
                 </div>
-            </div>
 
-            <div className="px-8 pb-8">
-                <div className="max-w-[1200px] mx-auto w-full">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {assets.map((asset) => (
-                            <AssetCard
-                                key={asset.address}
-                                asset={asset}
-                                onEdit={(asset) => setEditingAsset(asset)}
-                            />
-                        ))}
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {assets.map((asset: any) => (
+                        <AssetCard
+                            key={asset.address}
+                            asset={asset}
+                            onEdit={(asset) => setEditingAsset(asset)}
+                        />
+                    ))}
                 </div>
+
+                {isFormOpen && (
+                    <AssetForm
+                        asset={newAsset}
+                        onClose={() => setIsFormOpen(false)}
+                        onRefresh={refreshData}
+                        onSubmit={() => {
+                            refreshData;
+                        }}
+                    />
+                )}
+
+                {editingAsset && (
+                    <AssetForm
+                        asset={editingAsset}
+                        onClose={() => setEditingAsset(undefined)}
+                        onRefresh={refreshData}
+                        onSubmit={() => {
+                            refreshData;
+                        }}
+                    />
+                )}
             </div>
-
-            {isFormOpen && (
-                <AssetForm
-                    asset={newAsset}
-                    onClose={() => setIsFormOpen(false)}
-                    onRefresh={refreshData}
-                    onSubmit={() => {
-                        refreshData;
-                    }}
-                />
-            )}
-
-            {editingAsset && (
-                <AssetForm
-                    asset={editingAsset}
-                    onClose={() => setEditingAsset(undefined)}
-                    onRefresh={refreshData}
-                    onSubmit={() => {
-                        refreshData;
-                    }}
-                />
-            )}
         </div>
     );
 }

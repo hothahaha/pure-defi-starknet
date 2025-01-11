@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { ScaffoldStarkAppWithProviders } from "~~/components/ScaffoldStarkAppWithProviders";
 import "~~/styles/globals.css";
 import { ThemeProvider } from "~~/components/ThemeProvider";
-import { Markets } from "~~/components/market/Markets";
 
 export const metadata: Metadata = {
     title: "Scaffold-Stark",
@@ -11,14 +10,6 @@ export const metadata: Metadata = {
 };
 
 const ScaffoldStarkApp = ({ children }: { children: React.ReactNode }) => {
-    const menuLinks = [
-        {
-            label: "Markets",
-            href: "/markets",
-        },
-        // ... 其他路由
-    ];
-
     return (
         <html suppressHydrationWarning>
             <body>

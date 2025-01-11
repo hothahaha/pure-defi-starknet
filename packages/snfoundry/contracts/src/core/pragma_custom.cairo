@@ -7,7 +7,7 @@ pub trait IPragmaCustom<TContractState> {
     fn get_name(self: @TContractState) -> felt252;
     fn get_oracle(self: @TContractState) -> ContractAddress;
     fn fetch_price(
-        ref self: TContractState, yang: ContractAddress, force_update: bool,
+        ref self: TContractState, pair_id: felt252, force_update: bool,
     ) -> Result<u128, felt252>;
 }
 
@@ -15,7 +15,7 @@ pub trait IPragmaCustom<TContractState> {
 pub mod PragmaCustom {
     use contracts::interfaces::external::{IPragmaOracleDispatcher, IPragmaOracleDispatcherTrait};
     use pragma_lib::types::{DataType, PragmaPricesResponse};
-    use starknet::storage::{Map, StorageMapWriteAccess, StorageMapReadAccess};
+    use starknet::storage::{Map, StorageMapWriteAccess};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use core::num::traits::{Zero};
     use starknet::{get_block_timestamp};
@@ -48,18 +48,8 @@ pub mod PragmaCustom {
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     enum Event {
-        InvalidPriceUpdate: InvalidPriceUpdate,
         YangPairIdSet: YangPairIdSet,
         PriceValidityThresholdsUpdated: PriceValidityThresholdsUpdated,
-    }
-
-    #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    struct InvalidPriceUpdate {
-        #[key]
-        yang: ContractAddress,
-        price: u128,
-        pragma_last_updated_ts: u64,
-        pragma_num_sources: u32,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -160,9 +150,8 @@ pub mod PragmaCustom {
         }
 
         fn fetch_price(
-            ref self: ContractState, yang: ContractAddress, force_update: bool,
+            ref self: ContractState, pair_id: felt252, force_update: bool,
         ) -> Result<u128, felt252> {
-            let pair_id: felt252 = self.yang_pair_ids.read(yang);
             assert(pair_id.is_non_zero(), 'PGM: Unknown yang');
 
             let response: PragmaPricesResponse = self
@@ -179,15 +168,6 @@ pub mod PragmaCustom {
                 return Result::Ok(price);
             }
 
-            self
-                .emit(
-                    InvalidPriceUpdate {
-                        yang,
-                        price,
-                        pragma_last_updated_ts: response.last_updated_timestamp,
-                        pragma_num_sources: response.num_sources_aggregated,
-                    },
-                );
             Result::Err('PGM: Invalid price update')
         }
     }

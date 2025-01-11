@@ -71,11 +71,11 @@ const deployScript = async (): Promise<DeployedAddresses> => {
             dsc_token: dscAddress,
             reward_per_block: parseUnits("1", 15),
             asset_manager: amAddress,
-            token_addresses: [
-                "0x49D36570D4E46F48E99674BD3FCC84644DDD6B96F7C741B1562B82F9E004DC7",
-                "0x4718F5A0FC34CC1AF16A1CDEE98FFB20C31F5CD61D6AB07201858F4287C938D",
-            ],
-            pair_ids: ["ETH/USD", "STRK/USD"],
+            // token_addresses: [
+            //     "0x49D36570D4E46F48E99674BD3FCC84644DDD6B96F7C741B1562B82F9E004DC7",
+            //     "0x4718F5A0FC34CC1AF16A1CDEE98FFB20C31F5CD61D6AB07201858F4287C938D",
+            // ],
+            // pair_ids: ["ETH/USD", "STRK/USD"],
             oracle_address: pragmaCustomAddress,
         },
     });

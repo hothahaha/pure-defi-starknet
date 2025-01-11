@@ -81,6 +81,15 @@ fn init_token(
         i += 1;
     };
 
+    // 为 LendingPool 添加代币存量
+    let token = token_addresses.at(0);
+    let mock_erc20_eth_dispatcher = IMockERC20ETHDispatcher { contract_address: *token };
+    mock_erc20_eth_dispatcher.mint(lending_pool_address, 200000000000000000000);
+
+    let token = token_addresses.at(1);
+    let mock_erc20_strk_dispatcher = IMockERC20STRKDispatcher { contract_address: *token };
+    mock_erc20_strk_dispatcher.mint(lending_pool_address, 2000000000000000000000);
+
     let owner = users.at(0);
     // 为 AssetManager 添加资产
     let mut i: u32 = 0;
@@ -329,7 +338,7 @@ fn test_claim_reward() {
     start_cheat_block_timestamp(lending_pool_address, 3600);
 
     // 领取奖励
-    lending_pool.claim_reward(*token, user);
+    lending_pool.claim_reward(user);
     stop_cheat_block_timestamp(lending_pool_address);
 
     // 证用户获得了奖励
@@ -396,8 +405,7 @@ fn test_get_collateral_value() {
     stop_cheat_caller_address(lending_pool_address);
 
     let collateral_value = lending_pool.get_collateral_value(owner);
-    println!("collateral_value: {}", collateral_value);
-    assert(collateral_value == 1_500_000_000_000_000_000_000, 'wrong collateral value');
+    assert(collateral_value == 1500000000000000000000, 'wrong collateral value');
 }
 
 #[test]
@@ -412,7 +420,27 @@ fn test_get_max_withdraw_amount() {
     stop_cheat_caller_address(lending_pool_address);
 
     let max_withdraw = lending_pool.get_max_withdraw_amount(owner, *token);
-    assert(max_withdraw == 100000000000000000000, 'wrong max withdraw amount');
+    assert(max_withdraw == 100000000000000000000, 'wrong max withdraw amount 1');
+
+    lending_pool
+        .borrow(
+            *token, owner, 36000000000000000000,
+        ); // borrow 36 ETH = 72000 USD ,need collateral 72000 USD / 0.75 / 0.8 = 120000 USD
+    // max deposit value 200000 USD - 120000 USD = max withdraw value = 80000 USD
+    let max_withdraw = lending_pool.get_max_withdraw_amount(owner, *token);
+    assert(
+        max_withdraw == 40000000000000000000, 'wrong max withdraw amount 2',
+    ); // available withdraw 80000 USD / 2000 ETH/USD = 40 ETH
+
+    let token = token_addresses.at(1);
+    lending_pool
+        .borrow(
+            *token, owner, 600000000000000000000,
+        ); // borrow 600 STRK = 600 USD need 1000 USD collateral
+    let token = token_addresses.at(0);
+    // 80000 - 1000 USD = 79000 USD , 79000 USD / 2000 ETH/USD = 39.5 ETH
+    let max_withdraw = lending_pool.get_max_withdraw_amount(owner, *token);
+    assert(max_withdraw == 39500000000000000000, 'wrong max withdraw amount 3');
 }
 
 #[test]
@@ -423,7 +451,7 @@ fn test_get_asset_price() {
     let token = token_addresses.at(0);
 
     let price = lending_pool.get_asset_price(*token);
-    assert(price == 2000000000000000000000, 'wrong ETH price'); // $2000 with 18 decimals
+    assert(price == 200000000000, 'wrong ETH price'); // $2000 with 18 decimals
 }
 
 #[test]
@@ -435,12 +463,12 @@ fn test_get_asset_prices() {
     // 测试 ETH 价格
     let eth_token = *token_addresses.at(0);
     let eth_price = lending_pool.get_asset_price(eth_token);
-    assert(eth_price == 2000000000000000000000, 'wrong ETH price'); // $2000 with 18 decimals
+    assert(eth_price == 200000000000, 'wrong ETH price'); // $2000 with 8 decimals
 
     // 测试 STRK 价格
     let strk_token = *token_addresses.at(1);
     let STRK_price = lending_pool.get_asset_price(strk_token);
-    assert(STRK_price == 1000000000000000000, 'wrong STRK price'); // $1 with 8 decimals
+    assert(STRK_price == 100000000, 'wrong STRK price'); // $1 with 8 decimals
 }
 
 #[test]
